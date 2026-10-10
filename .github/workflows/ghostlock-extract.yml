@@ -40,10 +40,18 @@ jobs:
           EXTRACT_DIR="$GITHUB_WORKSPACE/ghostlock-app/tools/extract_rs"
           cd "$EXTRACT_DIR"
           cargo build --release
-          ls -lh "$EXTRACT_DIR/target/release/"
+
+          # 用 find 定位编译产物，避免路径假设错误
+          EXTRACT_BIN=$(find "$EXTRACT_DIR" -name "ghostlock-extract" -type f -perm -u+x | head -n 1)
+          echo "找到二进制: $EXTRACT_BIN"
+
+          if [ -z "$EXTRACT_BIN" ]; then
+            echo "找不到 ghostlock-extract，编译失败"
+            exit 1
+          fi
 
           if [ -f "$GITHUB_WORKSPACE/boot.img" ]; then
-            "$EXTRACT_DIR/target/release/ghostlock-extract" "$GITHUB_WORKSPACE/boot.img" \
+            "$EXTRACT_BIN" "$GITHUB_WORKSPACE/boot.img" \
               --format conf --out "$EXTRACT_DIR/profile.conf" || echo "EXTRACTION_FAILED"
           else
             echo "boot.img 未找到"
