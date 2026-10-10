@@ -35,63 +35,20 @@ jobs:
           cd ghostlock-app
           git submodule update --init --recursive
 
-      - name: Build and Run extract_rs
+      - name: Build and Locate extract_rs
         run: |
           EXTRACT_DIR="$GITHUB_WORKSPACE/ghostlock-app/tools/extract_rs"
           cd "$EXTRACT_DIR"
           cargo build --release
 
-          echo "===== 所有可执行文件 ====="
-          find "$EXTRACT_DIR/target" -type f -perm -u+x 2>/dev/null | head -100
-          echo "=========================="
+          echo "===== 全盘搜索可执行文件 (排除 .git) ====="
+          find "$GITHUB_WORKSPACE" -type f -perm -u+x ! -path "*/.git/*" 2>/dev/null | head -100
+          echo "=========================================="
 
-          echo "===== target/release 目录 ====="
-          ls -lh "$EXTRACT_DIR/target/release/" 2>/dev/null || echo "目录不存在"
-          echo "==============================="
+          echo "===== CARGO_TARGET_DIR ====="
+          echo "CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
+          echo "============================"
 
-          EXTRACT_BIN=""
-          for name in ghostlock-extract extract_rs payload-extract ghostlock extract; do
-            CANDIDATE=$(find "$EXTRACT_DIR/target" -type f -name "$name" -perm -u+x 2>/dev/null | head -n 1)
-            if [ -n "$CANDIDATE" ]; then
-              EXTRACT_BIN="$CANDIDATE"
-              break
-            fi
-          done
-
-          echo "找到二进制: $EXTRACT_BIN"
-
-          if [ -z "$EXTRACT_BIN" ]; then
-            echo "找不到可执行文件，请检查上面 find/ls 的输出"
-            exit 1
-          fi
-
-          if [ -f "$GITHUB_WORKSPACE/boot.img" ]; then
-            "$EXTRACT_BIN" "$GITHUB_WORKSPACE/boot.img" \
-              --format conf --out "$EXTRACT_DIR/profile.conf" || echo "EXTRACTION_FAILED"
-          else
-            echo "boot.img 未找到"
-            exit 1
-          fi
-
-      - name: Upload profile.conf
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ghostlock-profile-conf
-          path: ghostlock-app/tools/extract_rs/profile.conf
-          if-no-files-found: warn
-
-      - name: Print extraction log
-        if: always()
-        run: |
-          echo "===== 提取日志摘要 ====="
-          EXTRACT_DIR="$GITHUB_WORKSPACE/ghostlock-app/tools/extract_rs"
-          if [ -f "$EXTRACT_DIR/profile.conf" ]; then
-            echo "profile.conf 已生成，大小："
-            wc -c "$EXTRACT_DIR/profile.conf"
-            echo "--- 前80行预览 ---"
-            head -n 80 "$EXTRACT_DIR/profile.conf"
-          else
-            echo "未生成 profile.conf，提取失败。"
-            echo "原因可能是 extract_rs 不支持 4.19.191 内核，需要参考 K40 项目手工修补。"
-          fi
+          echo "===== 搜索名为 ghostlock-extract 或 extract_rs 的文件 ====="
+          find "$GITHUB_WORKSPACE" -type f \( -name "ghostlock-extract" -o -name "extract_rs" -o -name "payload-extract" \) ! -path "*/.git/*" 2>/dev/null
+          echo "==========================================================="
