@@ -41,12 +41,27 @@ jobs:
           cd "$EXTRACT_DIR"
           cargo build --release
 
-          # 用 find 定位编译产物，避免路径假设错误
-          EXTRACT_BIN=$(find "$EXTRACT_DIR" -name "ghostlock-extract" -type f -perm -u+x | head -n 1)
+          echo "===== 所有可执行文件 ====="
+          find "$EXTRACT_DIR/target" -type f -perm -u+x 2>/dev/null | head -100
+          echo "=========================="
+
+          echo "===== target/release 目录 ====="
+          ls -lh "$EXTRACT_DIR/target/release/" 2>/dev/null || echo "目录不存在"
+          echo "==============================="
+
+          EXTRACT_BIN=""
+          for name in ghostlock-extract extract_rs payload-extract ghostlock extract; do
+            CANDIDATE=$(find "$EXTRACT_DIR/target" -type f -name "$name" -perm -u+x 2>/dev/null | head -n 1)
+            if [ -n "$CANDIDATE" ]; then
+              EXTRACT_BIN="$CANDIDATE"
+              break
+            fi
+          done
+
           echo "找到二进制: $EXTRACT_BIN"
 
           if [ -z "$EXTRACT_BIN" ]; then
-            echo "找不到 ghostlock-extract，编译失败"
+            echo "找不到可执行文件，请检查上面 find/ls 的输出"
             exit 1
           fi
 
