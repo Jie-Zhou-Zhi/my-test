@@ -1,0 +1,75 @@
+name: GhostLock Kernel Offset Extraction
+
+on:
+  workflow_dispatch:
+    inputs:
+      boot_img_url:
+        description: 'https://github.com/Jie-Zhou-Zhi/my-test/releases/download/v1.0/boot.img'
+        required: true
+        default: 'https://github.com/Jie-Zhou-Zhi/my-test/releases/download/v1.0/boot.img'
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl unzip python3
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Download boot.img
+        run: |
+          curl -L -o boot.img "${{ github.event.inputs.boot_img_url }}"
+          ls -lh boot.img
+          file boot.img
+
+      - name: Clone ghostlock-app tools
+        run: |
+          git clone https://github.com/YuKongA/ghostlock-app.git
+          cd ghostlock-app
+          git submodule update --init --recursive
+
+      - name: Build extract_rs
+        run: |
+          cd ghostlock-app/tools/extract_rs
+          cargo build --release
+          ls -lh target/release/
+
+      - name: Run extraction on boot.img
+        run: |
+          cd ghostlock-app/tools/extract_rs
+          if [ -f ../../boot.img ]; then
+            ./target/release/ghostlock-extract ../../boot.img --format conf --out profile.conf || echo "EXTRACTION_FAILED"
+          else
+            echo "boot.img 未找到"
+            exit 1
+          fi
+
+      - name: Upload profile.conf
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ghostlock-profile-conf
+          path: ghostlock-app/tools/extract_rs/profile.conf
+          if-no-files-found: warn
+
+      - name: Print extraction log
+        if: always()
+        run: |
+          echo "===== 提取日志摘要 ====="
+          cd ghostlock-app/tools/extract_rs
+          if [ -f profile.conf ]; then
+            echo "profile.conf 已生成，大小："
+            wc -c profile.conf
+            echo "--- 前80行预览 ---"
+            head -n 80 profile.conf
+          else
+            echo "未生成 profile.conf，提取失败。"
+            echo "原因可能是 extract_rs 不支持 4.19.191 内核，需要参考 K40 项目手工修补。"
+          fi
