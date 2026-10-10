@@ -35,20 +35,45 @@ jobs:
           cd ghostlock-app
           git submodule update --init --recursive
 
-      - name: Build and Locate extract_rs
+      - name: Build and Run extract_rs
         run: |
           EXTRACT_DIR="$GITHUB_WORKSPACE/ghostlock-app/tools/extract_rs"
           cd "$EXTRACT_DIR"
           cargo build --release
 
-          echo "===== 全盘搜索可执行文件 (排除 .git) ====="
-          find "$GITHUB_WORKSPACE" -type f -perm -u+x ! -path "*/.git/*" 2>/dev/null | head -100
-          echo "=========================================="
+          EXTRACT_BIN="$GITHUB_WORKSPACE/ghostlock-app/build/extract/release/ghostlock-extract"
+          echo "使用二进制: $EXTRACT_BIN"
 
-          echo "===== CARGO_TARGET_DIR ====="
-          echo "CARGO_TARGET_DIR=$CARGO_TARGET_DIR"
-          echo "============================"
+          if [ ! -f "$EXTRACT_BIN" ]; then
+            echo "找不到 ghostlock-extract"
+            exit 1
+          fi
 
-          echo "===== 搜索名为 ghostlock-extract 或 extract_rs 的文件 ====="
-          find "$GITHUB_WORKSPACE" -type f \( -name "ghostlock-extract" -o -name "extract_rs" -o -name "payload-extract" \) ! -path "*/.git/*" 2>/dev/null
-          echo "==========================================================="
+          if [ -f "$GITHUB_WORKSPACE/boot.img" ]; then
+            "$EXTRACT_BIN" "$GITHUB_WORKSPACE/boot.img" \
+              --format conf --out "$GITHUB_WORKSPACE/profile.conf" || echo "EXTRACTION_FAILED"
+          else
+            echo "boot.img 未找到"
+            exit 1
+          fi
+
+      - name: Upload profile.conf
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ghostlock-profile-conf
+          path: profile.conf
+          if-no-files-found: warn
+
+      - name: Print extraction log
+        if: always()
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/profile.conf" ]; then
+            echo "profile.conf 已生成，大小："
+            wc -c "$GITHUB_WORKSPACE/profile.conf"
+            echo "--- 前80行预览 ---"
+            head -n 80 "$GITHUB_WORKSPACE/profile.conf"
+          else
+            echo "未生成 profile.conf，提取失败。"
+            echo "原因可能是 extract_rs 不支持 4.19.191 内核，需要参考 K40 项目手工修补。"
+          fi
