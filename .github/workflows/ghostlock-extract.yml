@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       boot_img_url:
-        description: 'https://github.com/Jie-Zhou-Zhi/my-test/releases/download/v1.0/boot.img'
+        description: 'boot.img 的下载直链（GitHub Release 链接）'
         required: true
         default: 'https://github.com/Jie-Zhou-Zhi/my-test/releases/download/v1.0/boot.img'
 
@@ -35,17 +35,16 @@ jobs:
           cd ghostlock-app
           git submodule update --init --recursive
 
-      - name: Build extract_rs
+      - name: Build and Run extract_rs
         run: |
-          cd ghostlock-app/tools/extract_rs
+          EXTRACT_DIR="$GITHUB_WORKSPACE/ghostlock-app/tools/extract_rs"
+          cd "$EXTRACT_DIR"
           cargo build --release
-          ls -lh target/release/
+          ls -lh "$EXTRACT_DIR/target/release/"
 
-      - name: Run extraction on boot.img
-        run: |
-          cd ghostlock-app/tools/extract_rs
-          if [ -f ../../boot.img ]; then
-            ./target/release/ghostlock-extract ../../boot.img --format conf --out profile.conf || echo "EXTRACTION_FAILED"
+          if [ -f "$GITHUB_WORKSPACE/boot.img" ]; then
+            "$EXTRACT_DIR/target/release/ghostlock-extract" "$GITHUB_WORKSPACE/boot.img" \
+              --format conf --out "$EXTRACT_DIR/profile.conf" || echo "EXTRACTION_FAILED"
           else
             echo "boot.img 未找到"
             exit 1
@@ -63,12 +62,12 @@ jobs:
         if: always()
         run: |
           echo "===== 提取日志摘要 ====="
-          cd ghostlock-app/tools/extract_rs
-          if [ -f profile.conf ]; then
+          EXTRACT_DIR="$GITHUB_WORKSPACE/ghostlock-app/tools/extract_rs"
+          if [ -f "$EXTRACT_DIR/profile.conf" ]; then
             echo "profile.conf 已生成，大小："
-            wc -c profile.conf
+            wc -c "$EXTRACT_DIR/profile.conf"
             echo "--- 前80行预览 ---"
-            head -n 80 profile.conf
+            head -n 80 "$EXTRACT_DIR/profile.conf"
           else
             echo "未生成 profile.conf，提取失败。"
             echo "原因可能是 extract_rs 不支持 4.19.191 内核，需要参考 K40 项目手工修补。"
